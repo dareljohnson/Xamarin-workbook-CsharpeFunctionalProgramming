@@ -1,0 +1,339 @@
+---
+uti: com.xamarin.workbook
+id: 5c310f85-7b0f-4d2c-afde-4fad91936736
+title: Functional-programming
+platforms:
+- DotNetCore
+packages:
+- id: FluentAssertions
+  version: 6.7.0
+- id: MSTest.TestAdapter
+  version: 2.2.10
+- id: MSTest.TestFramework
+  version: 2.2.10
+- id: System.Text.RegularExpressions
+  version: 4.3.1
+---
+
+## Functional Programming in C#
+
+#### Without Funcs
+
+```csharp
+private string dwStories = @"A,An Unearthly Child,3
+B,The Dead Planet,5
+C,The Edge of Destruction,4
+D,Marco Polo,5
+E,The Keys of Marinus,2
+F,The Aztecs,4
+G,The Sensorites,1
+H,The Reign of Terror,3";
+```
+
+```csharp
+var storiesSplitByRow = dwStories.Split("\n");
+```
+
+```csharp
+var bestStories = new List<string>();
+```
+
+```csharp
+var seen = new List<string>();
+
+foreach(var sr in storiesSplitByRow)
+{
+    var rowData = sr.Split(",");
+    var rating = int.Parse(rowData[2]);
+    if(seen.Contains(rowData[1])) continue;
+
+    if(rating >=4)
+    {
+        bestStories.Add(rowData[1]);
+    }
+    seen.Add(rowData[1]);
+}
+```
+
+```csharp
+foreach(var bs in bestStories)
+{
+    Console.WriteLine(bs);
+}
+```
+
+### Let’s do it the functional programming way
+
+```csharp
+var bestStories_fun = dwStories.Split("\n").Select(x => x.Split(",")).Where(x => int.Parse(x[2]) >= 4).Select(x => x[1]).OrderBy(x => x);
+```
+
+```csharp
+foreach(var bs in bestStories_fun)
+{
+    Console.WriteLine(bs);
+}
+```
+
+```csharp
+#r "FluentAssertions"
+```
+
+```csharp
+using FluentAssertions;
+```
+
+### Custom Funcs
+
+```csharp
+class EpisodeData
+{
+    public string SerialCode {get;set;}
+    public string Title {get;set;}
+    public int Rating {get;set;}
+}
+```
+
+```csharp
+private readonly Func<string, string[]> _splitOnComma = x => x.Split(",");
+```
+
+```csharp
+private readonly Func<string[], EpisodeData> _parseData = x => new EpisodeData
+{
+    SerialCode = x[0],
+    Title = x[1],
+    Rating = int.Parse(x[2])
+};
+```
+
+```csharp
+private readonly Func<EpisodeData, bool> _getBestStories = x => x.Rating >= 4;
+```
+
+```csharp
+var bestStories_fun2 = dwStories.Split("\n").Select(_splitOnComma).Select(_parseData).Where(_getBestStories).Select(x => x.Title).OrderBy(x => x);
+```
+
+```csharp
+foreach(var bs in bestStories_fun2)
+{
+    Console.WriteLine(bs);
+}
+```
+
+## Let’s validate UK’s Nino numbers
+
+### More Funcs for Rules
+
+```csharp
+#r "System.Text.RegularExpressions"
+```
+
+```csharp
+#r "System"
+```
+
+```csharp
+using System.Text.RegularExpressions;
+```
+
+```csharp
+using System;
+```
+
+```csharp
+private readonly Func<string,bool> _mustHaveLengthOf9 = x => x.Length == 9;
+```
+
+```csharp
+private readonly Func<string,bool> _mustStartWithAlpha = x => new Regex("[a-zA-Z]").IsMatch(x.Substring(0,2));
+```
+
+```csharp
+private readonly Func<string,bool> _mustHaveNext6CharsAsDigits = x => new Regex("[0-9]").IsMatch(x.Substring(2,6));
+```
+
+```csharp
+private readonly Func<string,bool> _mustHaveAValidLastChar = x => new Regex("[A-D]").IsMatch(x.Substring(x.Length - 1,1));
+```
+
+```csharp
+private readonly Func<string,bool> _mustHaveAValidFirstChar = x => new Regex("[DFIQUV]").IsMatch(x.Substring(0,1));
+```
+
+```csharp
+private readonly Func<string,bool> _mustHaveAValidSecondChar = x => new Regex("[DFIOQUV]").IsMatch(x.Substring(1,1));
+```
+
+```csharp
+public bool ValidateNino(string nino) => new[]
+{
+    _mustHaveLengthOf9,
+    _mustStartWithAlpha,
+    _mustHaveNext6CharsAsDigits,
+    _mustHaveAValidLastChar,
+    _mustHaveAValidFirstChar,
+    _mustHaveAValidSecondChar
+}.All(x => x(nino.Replace(" ","")));
+```
+
+#### Nino number example: QQ 12 34 56 C and QQ 12 34 56 A
+
+```csharp
+ValidateNino("QQ 12 34 56 C");
+```
+
+### An improved and more concise validation Func
+
+```csharp
+public static bool Validate<TInput>(this TInput @this, params Func<TInput, bool>[] predicates) => predicates.All(x => x(@this));
+```
+
+```csharp
+public bool ValidateNinoV2(string nino) =>
+ nino.Replace(" ","")
+ .Validate(
+     _mustHaveLengthOf9,
+     _mustStartWithAlpha,
+     _mustHaveNext6CharsAsDigits,
+     _mustHaveAValidLastChar,
+     _mustHaveAValidFirstChar,
+     _mustHaveAValidSecondChar
+ );
+```
+
+```csharp
+ValidateNinoV2("QQ 12 34 56 B");
+```
+
+Extension Methods and Funcs for Rules
+
+```csharp
+public static bool IsRegexMatch(this string @this, string pattern) => new Regex(pattern).IsMatch(@this);
+```
+
+```csharp
+public static bool HasLengthOf(this string @this, int I) => @this.Length == I;
+```
+
+```csharp
+public static bool IsAlphaNumeric(this string @this) => @this.IsRegexMatch("[a-zA-Z]");
+```
+
+```csharp
+public static bool AreAllNumeric(this string @this) => @this.IsRegexMatch("[0-9]");
+```
+
+```csharp
+public static bool IsOneOfCharSet(this char @this, string charSet) => @this.ToString().IsRegexMatch($"[{charSet}]");
+```
+
+```csharp
+public static bool Not(this bool @this) => !@this;
+```
+
+```csharp
+public static bool IsNotOneOfCharSet(this char @this, string charSet) => IsOneOfCharSet(@this, charSet).Not();
+```
+
+```csharp
+public static char Second(this string @this) => @this[1];
+```
+
+```csharp
+public static string StartChars(this string @this, int noChars) => new string(@this.Take(noChars).ToArray());
+```
+
+```csharp
+public static string CharsBetween(this string @this, int from, int to) => new string(@this.Substring(from,to).ToArray());
+```
+
+```csharp
+public bool ValidateNinoV3(string nino) =>
+ nino.Replace(" ","")
+ .Validate(
+     x => x.HasLengthOf(9),
+     x => x.StartChars(2).IsAlphaNumeric(),
+     x => x.CharsBetween(2, 6).AreAllNumeric(),
+     x => x.Last().IsOneOfCharSet("A-D"),
+     x => x.First().IsOneOfCharSet("DFIQUV"),
+     x => x.Second().IsOneOfCharSet("DFIOQUV")
+ );
+```
+
+```csharp
+ValidateNinoV2("QQ 12 34 26 D");
+```
+
+More methods with Funcs and Explict Rules
+
+```csharp
+public decimal ApplyTaxToSalary(decimal salary) =>
+    new (Func<decimal, bool> condition, Func<decimal, decimal> calcualtor)[]
+    {
+        (x => x <= 11850, x => x),
+        (x => x <= 46350, x => x * 0.8M),
+        (x => x <= 150000, x => x * 0.6M),
+        (x => x > 150000, x => x * 0.55M)
+    }.First(x => x.condition(salary)).calcualtor(salary);
+```
+
+```csharp
+ApplyTaxToSalary(11200);
+```
+
+More Funcs and Unit tests
+
+```csharp
+#r "Microsoft.VisualStudio.TestPlatform.TestFramework"
+#r "Microsoft.VisualStudio.TestPlatform.TestFramework.Extensions"
+```
+
+```csharp
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.IO;
+```
+
+```csharp
+private static readonly Func<string,string> DataBaseOperationThatReturns = x => $"this works: {x}";
+```
+
+```csharp
+private static readonly Func<string,string> DataBaseOperationThatDoesNotReturn = x => null;
+```
+
+```csharp
+private static TOuput IfDefaultDo<TInput,TOuput>(this TOuput @this, Func<TInput,TOuput> elseF, TInput input) => 
+    EqualityComparer<TOuput>.Default.Equals(@this, default(TOuput)) ? elseF(input) : @this;
+```
+
+```csharp
+public static TOuput Alt<TInput, TOuput>(this TInput @this, Func<TInput,TOuput> f1, Func<TInput,TOuput> f2) => f1(@this).IfDefaultDo(f2,@this);
+```
+
+```csharp
+[TestClass]
+public static class TestOne
+{
+    [TestMethod]
+    public static void TestAlt()
+    {
+        var input = "Darel Johnson";
+        var output = input.Alt(DataBaseOperationThatDoesNotReturn, DataBaseOperationThatReturns);
+        output.Should().Be("this works: Darel Johnson");
+        var compare1 = input.Replace(" ","");
+        var compare2 = output.Split(":")[1].Replace(" ","");
+        if(compare1 == compare2) 
+        {
+            Console.WriteLine("Test passed");
+        } else {
+            Console.WriteLine("Test failed!");
+        }     
+    }
+}
+```
+
+```csharp
+TestOne.TestAlt();
+```
